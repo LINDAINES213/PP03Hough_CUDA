@@ -1529,7 +1529,7 @@ static int prepare_dir(const path& graphDir)
 		}
 	}
 
-	if(!filesystem::is_empty(graphDir))
+	if(!boost::filesystem::is_empty(graphDir))
 	{
 		if(0 == remove_all(graphDir))
 		{
@@ -1634,7 +1634,8 @@ static int prepare_graph_private_mem(void)
 
 	if (gGraphs == 0)
 	{
-		gGraphs = new (nothrow) struct pgm_graph[PGM_MAX_GRAPHS];
+		gGraphs = new (std::nothrow) struct pgm_graph[PGM_MAX_GRAPHS];
+
 		if (gGraphs)
 		{
 			memset(gGraphs, 0, sizeof(struct pgm_graph)*PGM_MAX_GRAPHS);
