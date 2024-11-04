@@ -6,6 +6,8 @@
  License       : Released under the GNU GPL 3.0
  Description   :
  To build use  : make
+ nvcc houghBase.cu -o hough
+ ./hough runway.pgm
  ============================================================================
  */
 #include <stdio.h>
@@ -13,7 +15,9 @@
 #include <math.h>
 #include <cuda.h>
 #include <string.h>
-#include "common/pgm.h"
+#include <cuda_runtime.h>
+#include "pgm.h"
+#include "PGMImage.h"
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
