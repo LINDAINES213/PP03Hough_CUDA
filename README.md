@@ -44,6 +44,6 @@ Usamos eventos de CUDA para medir el tiempo de ejecución en las versiones con:
 - Memoria global + Constante + Compartida
 
 ## 👥 Autores
-Diego Alexander Hernández Silvestre, 21270 🎓
-Mario Antonio Guerra Morales, 21008 🖥️
-Linda Inés Jiménez Vides, 21169 🔍
+- Diego Alexander Hernández Silvestre, 21270 🎓
+- Mario Antonio Guerra Morales, 21008 🖥️
+- Linda Inés Jiménez Vides, 21169 🔍
