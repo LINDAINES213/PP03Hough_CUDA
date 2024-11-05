@@ -10,13 +10,16 @@
  ./hough runway.pgm
  ============================================================================
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <cuda.h>
 #include <string.h>
+#include <cuda_runtime.h>
 #include "common/pgm.h"
 #include "common/PGMImage.h"
+#include <opencv2/opencv.hpp> 
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -76,7 +79,8 @@ void CPU_HoughTran (unsigned char *pic, int w, int h, int **acc)
 __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float rMax, float rScale, float *d_Cos, float *d_Sin)
 {
   //TODO calcular: int gloID = ?
-  int gloID = w * h + 1; //TODO
+  //int gloID = w * h + 1; //TODO
+  int gloID = blockIdx.x * blockDim.x + threadIdx.x;
   if (gloID > w * h) return;      // in case of extra threads in block
 
   int xCent = w / 2;
@@ -105,6 +109,34 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
   //utilizar operaciones atomicas para seguridad
   //faltara sincronizar los hilos del bloque en algunos lados
 
+}
+
+void drawHoughLines(cv::Mat& img, int* hough_acc, float rMax, float rScale, int degreeBins, int rBins, float radInc, int threshold) {
+    for (int rIdx = 0; rIdx < rBins; rIdx++) {
+        for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
+            int acc_val = hough_acc[rIdx * degreeBins + tIdx];
+            if (acc_val > threshold) { // Solo dibujar líneas con alta acumulación
+                float theta = tIdx * radInc;
+                float r = rIdx * rScale - rMax;
+
+                // Convertir (r, theta) en puntos (x1, y1) y (x2, y2) para dibujar la línea
+                float cosTheta = cos(theta);
+                float sinTheta = sin(theta);
+                int x0 = r * cosTheta;
+                int y0 = r * sinTheta;
+
+                // Puntos extremos de la línea para dibujar en la imagen
+                cv::Point pt1, pt2;
+                pt1.x = cvRound(x0 + 1000 * (-sinTheta));
+                pt1.y = cvRound(y0 + 1000 * (cosTheta));
+                pt2.x = cvRound(x0 - 1000 * (-sinTheta));
+                pt2.y = cvRound(y0 - 1000 * (cosTheta));
+
+                // Dibujar la línea en la imagen
+                cv::line(img, pt1, pt2, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+            }
+        }
+    }
 }
 
 //*****************************************************************
@@ -161,7 +193,16 @@ int main (int argc, char **argv)
   // execution configuration uses a 1-D grid of 1-D blocks, each made of 256 threads
   //1 thread por pixel
   int blockNum = ceil (w * h / 256);
+
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, 0);
+
   GPU_HoughTran <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale, d_Cos, d_Sin);
+
+  cudaEventRecord(stop, 0);
+  cudaEventSynchronize(stop);
 
   // get results from device
   cudaMemcpy (h_hough, d_hough, sizeof (int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
@@ -174,7 +215,35 @@ int main (int argc, char **argv)
   }
   printf("Done!\n");
 
+  float elapsedTime;
+  cudaEventElapsedTime(&elapsedTime, start, stop);
+  printf("Tiempo de ejecución del kernel: %f ms\n", elapsedTime);
+
+  cv::Mat img = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
+  cv::Mat img_with_lines = img.clone();
+
+  // Definir un umbral para detección de líneas
+  int threshold = 100; // Ajusta el valor según la densidad de las líneas detectadas en el acumulador
+
+  // Dibujar las líneas detectadas en la imagen clonada
+  drawHoughLines(img_with_lines, h_hough, rMax, rScale, degreeBins, rBins, radInc, threshold);
+
+  // Guardar la imagen con las líneas dibujadas
+  cv::imwrite("imagen_con_lineas.jpg", img_with_lines);
+
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+
   // TODO clean-up
+  cudaFree(d_Cos);
+  cudaFree(d_Sin);
+  cudaFree(d_in);
+  cudaFree(d_hough);
+
+  free(pcCos);
+  free(pcSin);
+  free(h_hough);
+  free(cpuht);
 
   return 0;
 }
