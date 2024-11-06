@@ -19,7 +19,7 @@
 #include <cuda_runtime.h>
 #include "common/pgm.h"
 #include "common/PGMImage.h"
-#include <cairo/cairo.h>
+#include <cairo/cairo.h>  // Incluir Cairo
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -111,29 +111,26 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
 
 }
 
-void drawHoughLinesCairo(cairo_t *cr, int* hough_acc, float rMax, float rScale, int degreeBins, int rBins, float radInc, int threshold, int w, int h) {
+void drawHoughLinesCairo(cairo_t *cr, int *hough_acc, float rMax, float rScale, int degreeBins, int rBins, float radInc, int threshold, int w, int h) {
     for (int rIdx = 0; rIdx < rBins; rIdx++) {
         for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
             int acc_val = hough_acc[rIdx * degreeBins + tIdx];
-            if (acc_val > threshold) { // Solo dibujar líneas con alta acumulación
+            if (acc_val > threshold) {
                 float theta = tIdx * radInc;
                 float r = rIdx * rScale - rMax;
 
-                // Convertir (r, theta) en puntos (x1, y1) y (x2, y2) para dibujar la línea
                 float cosTheta = cos(theta);
                 float sinTheta = sin(theta);
                 int x0 = r * cosTheta;
                 int y0 = r * sinTheta;
 
-                // Puntos extremos de la línea para dibujar en la imagen
-                int x1 = std::round(x0 + 1000 * (-sinTheta));
-                int y1 = std::round(y0 + 1000 * (cosTheta));
-                int x2 = std::round(x0 - 1000 * (-sinTheta));
-                int y2 = std::round(y0 - 1000 * (cosTheta));
+                int x1 = static_cast<int>(round(x0 + 1000 * (-sinTheta)));
+                int y1 = static_cast<int>(round(y0 + 1000 * (cosTheta)));
+                int x2 = static_cast<int>(round(x0 - 1000 * (-sinTheta)));
+                int y2 = static_cast<int>(round(y0 - 1000 * (cosTheta)));
 
-                // Dibujar la línea en la imagen con Cairo
-                cairo_move_to(cr, x1, y1);
-                cairo_line_to(cr, x2, y2);
+                cairo_move_to(cr, x1 + w / 2, y1 + h / 2); // Centrar la imagen
+                cairo_line_to(cr, x2 + w / 2, y2 + h / 2); // Centrar la imagen
                 cairo_set_source_rgb(cr, 1.0, 0.0, 0.0); // Color rojo
                 cairo_set_line_width(cr, 1);
                 cairo_stroke(cr);  // Dibujar la línea
@@ -222,20 +219,25 @@ int main (int argc, char **argv)
   cudaEventElapsedTime(&elapsedTime, start, stop);
   printf("Tiempo de ejecución del kernel: %f ms\n", elapsedTime);
 
-   // Crear una superficie de imagen Cairo
-  cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, w, h);
+// Dibujar las líneas sobre la imagen original
+  cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
   cairo_t *cr = cairo_create(surface);
+  // Cargar la imagen original en la superficie de Cairo
+  unsigned char *data = inImg.pixels; // Aquí se utilizan los píxeles originales
+  for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+          unsigned char pixel = data[y * w + x];
+          cairo_set_source_rgb(cr, pixel / 255.0, pixel / 255.0, pixel / 255.0); // Escalar de 0-255 a 0-1
+          cairo_rectangle(cr, x, y, 1, 1);
+          cairo_fill(cr);
+      }
+  }
 
-  // Dibujar las líneas detectadas usando Cairo
-  int threshold = 1500;
-  drawHoughLinesCairo(cr, h_hough, rMax, rScale, degreeBins, rBins, radInc, threshold, w, h);
+  // Llamar a la función para dibujar las líneas
+  drawHoughLinesCairo(cr, h_hough, rMax, rScale, degreeBins, rBins, radInc, 3800, w, h);
 
-  // Guardar la imagen resultante en formato PNG
-  cairo_surface_write_to_png(surface, "imagen_con_lineas.png");
-
-  // Limpiar recursos
-  cairo_destroy(cr);
-  cairo_surface_destroy(surface);
+  // Guardar la imagen resultante
+  cairo_surface_write_to_png(surface, "output.png");
 
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
