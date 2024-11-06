@@ -19,7 +19,7 @@
 #include <cuda_runtime.h>
 #include "common/pgm.h"
 #include "common/PGMImage.h"
-#include <opencv2/opencv.hpp> 
+#include <cairo/cairo.h>
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -111,7 +111,7 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
 
 }
 
-void drawHoughLines(cv::Mat& img, int* hough_acc, float rMax, float rScale, int degreeBins, int rBins, float radInc, int threshold) {
+void drawHoughLinesCairo(cairo_t *cr, int* hough_acc, float rMax, float rScale, int degreeBins, int rBins, float radInc, int threshold, int w, int h) {
     for (int rIdx = 0; rIdx < rBins; rIdx++) {
         for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
             int acc_val = hough_acc[rIdx * degreeBins + tIdx];
@@ -126,14 +126,17 @@ void drawHoughLines(cv::Mat& img, int* hough_acc, float rMax, float rScale, int 
                 int y0 = r * sinTheta;
 
                 // Puntos extremos de la línea para dibujar en la imagen
-                cv::Point pt1, pt2;
-                pt1.x = cvRound(x0 + 1000 * (-sinTheta));
-                pt1.y = cvRound(y0 + 1000 * (cosTheta));
-                pt2.x = cvRound(x0 - 1000 * (-sinTheta));
-                pt2.y = cvRound(y0 - 1000 * (cosTheta));
+                int x1 = std::round(x0 + 1000 * (-sinTheta));
+                int y1 = std::round(y0 + 1000 * (cosTheta));
+                int x2 = std::round(x0 - 1000 * (-sinTheta));
+                int y2 = std::round(y0 - 1000 * (cosTheta));
 
-                // Dibujar la línea en la imagen
-                cv::line(img, pt1, pt2, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                // Dibujar la línea en la imagen con Cairo
+                cairo_move_to(cr, x1, y1);
+                cairo_line_to(cr, x2, y2);
+                cairo_set_source_rgb(cr, 1.0, 0.0, 0.0); // Color rojo
+                cairo_set_line_width(cr, 1);
+                cairo_stroke(cr);  // Dibujar la línea
             }
         }
     }
@@ -219,17 +222,20 @@ int main (int argc, char **argv)
   cudaEventElapsedTime(&elapsedTime, start, stop);
   printf("Tiempo de ejecución del kernel: %f ms\n", elapsedTime);
 
-  cv::Mat img = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
-  cv::Mat img_with_lines = img.clone();
+   // Crear una superficie de imagen Cairo
+  cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, w, h);
+  cairo_t *cr = cairo_create(surface);
 
-  // Definir un umbral para detección de líneas
-  int threshold = 100; // Ajusta el valor según la densidad de las líneas detectadas en el acumulador
+  // Dibujar las líneas detectadas usando Cairo
+  int threshold = 1500;
+  drawHoughLinesCairo(cr, h_hough, rMax, rScale, degreeBins, rBins, radInc, threshold, w, h);
 
-  // Dibujar las líneas detectadas en la imagen clonada
-  drawHoughLines(img_with_lines, h_hough, rMax, rScale, degreeBins, rBins, radInc, threshold);
+  // Guardar la imagen resultante en formato PNG
+  cairo_surface_write_to_png(surface, "imagen_con_lineas.png");
 
-  // Guardar la imagen con las líneas dibujadas
-  cv::imwrite("imagen_con_lineas.jpg", img_with_lines);
+  // Limpiar recursos
+  cairo_destroy(cr);
+  cairo_surface_destroy(surface);
 
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
