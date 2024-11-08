@@ -18,6 +18,7 @@
 #include <string.h>
 #include <cuda_runtime.h>
 #include "common/pgm.h"
+#include "common/PGMImage.h"
 #include <cairo/cairo.h>  // Incluir Cairo
 
 const int degreeInc = 2;

@@ -1,5 +1,4 @@
-houghGlobal
-houghGlobalConstant
+hough
 pgm.o
 Prueba.cpp
 cuda_12.6.2_560.35.03_linux.run.1
