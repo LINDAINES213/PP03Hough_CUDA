@@ -18,7 +18,6 @@
 #include <string.h>
 #include <cuda_runtime.h>
 #include "common/pgm.h"
-#include "common/PGMImage.h"
 #include <cairo/cairo.h>  // Incluir Cairo
 
 const int degreeInc = 2;
@@ -219,7 +218,7 @@ int main (int argc, char **argv)
   cudaEventElapsedTime(&elapsedTime, start, stop);
   printf("Tiempo de ejecución del kernel: %f ms\n", elapsedTime);
 
-// Dibujar las líneas sobre la imagen original
+  // Dibujar las líneas sobre la imagen original
   cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
   cairo_t *cr = cairo_create(surface);
   // Cargar la imagen original en la superficie de Cairo
@@ -243,6 +242,9 @@ int main (int argc, char **argv)
   cudaEventDestroy(stop);
 
   // TODO clean-up
+  cairo_destroy(cr);
+  cairo_surface_destroy(surface);
+
   cudaFree(d_Cos);
   cudaFree(d_Sin);
   cudaFree(d_in);
