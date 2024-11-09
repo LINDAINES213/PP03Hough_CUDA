@@ -62,11 +62,41 @@ __constant__ float d_Cos[degreeBins];
 __constant__ float d_Sin[degreeBins];
 
 //*****************************************************************
-//TODO Kernel memoria compartida
-// __global__ void GPU_HoughTranShared(...)
-// {
-//   //TODO
-// }
+
+__global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) {
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+  int locID = blockIdx.x * blockDim.x + threadIdx.x; //Definición de locID en base al thread.
+  extern __shared__ int localAcc[]; //Acumulador local "localAcc"
+
+  if (locID < (degreeBins * rBins)) {
+    localAcc[locID] = 0; //Inicialización a cero de cada elemento del acumulador en memoria compartida.
+  }
+
+  __syncthreads(); //Barrera para los hilos del bloque en cuestión.
+
+  //Si el píxel es parte de un borde:
+  if (x < w && y < h && pic[y * w + x] > 0) {
+    int xCoord x - w / 2;
+    int yCoord = h / 2 - y;
+
+    for (int thetaIdx = 0; thetaIdx < degreeBins; thetaIdx++) {
+      float r = xCoord * d_Cos[thetaIdx] + yCoord * d_Sin[thetaIdx];
+      int rIdx = (int)((r + rBins / 2.0) / rBins * degreeBins);
+      //Modificación del acumulador local.
+      atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
+      }
+    }
+  }
+
+  __syncthreads(); //Segunda barrera.
+
+  //Loop al final del kernel para sumar los valores a acc.
+  if (locID < (degreeBins * rBins)) {
+    atomicAdd(&acc[locID], localAcc[locID]);
+  }
+
+
 //TODO Kernel memoria Constante
 __global__ void GPU_HoughTranConst (unsigned char *pic, int w, int h, int *acc, float rMax, float rScale)
 {
@@ -199,7 +229,6 @@ int main (int argc, char **argv)
   cudaMemcpyToSymbol(d_Cos, pcCos, sizeof(float) * degreeBins);
   cudaMemcpyToSymbol(d_Sin, pcSin, sizeof(float) * degreeBins);
 
-
   // setup and copy data from host to device
   unsigned char *d_in, *h_in;
   int *d_hough, *h_hough;
@@ -217,12 +246,19 @@ int main (int argc, char **argv)
   //1 thread por pixel
   int blockNum = ceil (w * h / 256);
 
+  dim3 blockSize(16, 16);
+  dim3 gridSize((w + blockSize.x - 1) / blockSize.x, (h + blockSize.y - 1) / blockSize.y);
+
+  // Tamaño memoria compartida
+
+  size_t sharedMemSize = degreeBins * rBins * sizeof(int);
+
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   cudaEventRecord(start, 0);
 
-  GPU_HoughTranConst <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale);
+  GPU_HoughTranShared <<<gridSize, blockSize, sharedMemSize>>> (d_in, w, h, d_hough);
 
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
