@@ -77,7 +77,7 @@ __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) 
 
   //Si el píxel es parte de un borde:
   if (x < w && y < h && pic[y * w + x] > 0) {
-    int xCoord x - w / 2;
+    int xCoord = x - w / 2;
     int yCoord = h / 2 - y;
 
     for (int thetaIdx = 0; thetaIdx < degreeBins; thetaIdx++) {
@@ -87,13 +87,12 @@ __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) 
       atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
       }
     }
-  }
-
-  __syncthreads(); //Segunda barrera.
-
-  //Loop al final del kernel para sumar los valores a acc.
-  if (locID < (degreeBins * rBins)) {
-    atomicAdd(&acc[locID], localAcc[locID]);
+    __syncthreads(); //Segunda barrera.
+    
+    //Loop al final del kernel para sumar los valores a acc.
+    if (locID < (degreeBins * rBins)) {
+      atomicAdd(&acc[locID], localAcc[locID]);
+    }
   }
 
 
