@@ -80,10 +80,12 @@ __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) 
   if (x < w && y < h && pic[y * w + x] > 0) {
     int xCoord = x - w / 2;
     int yCoord = h / 2 - y;
+    float rMax = sqrtf(w * w + h * h) / 2.0f;
+    float rScale = 2 * rMax / rBins;
 
     for (int thetaIdx = 0; thetaIdx < degreeBins; thetaIdx++) {
       float r = xCoord * d_Cos[thetaIdx] + yCoord * d_Sin[thetaIdx];
-      int rIdx = (int)((r + sqrtf(w * w + h * h) / 2) / (2 * sqrtf(w * w + h * h) / rBins));
+      int rIdx = (int)((r + rMax) / rScale); //Calculo ajustado para rIdx
       //Modificación del acumulador local.
       if (rIdx >= 0 && rIdx < rBins) {
         atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
