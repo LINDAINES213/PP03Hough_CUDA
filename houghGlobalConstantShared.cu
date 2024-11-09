@@ -63,6 +63,7 @@ __constant__ float d_Sin[degreeBins];
 
 //*****************************************************************
 
+//TODO Kernel memoria Compartida (SHARED)
 __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -82,9 +83,11 @@ __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) 
 
     for (int thetaIdx = 0; thetaIdx < degreeBins; thetaIdx++) {
       float r = xCoord * d_Cos[thetaIdx] + yCoord * d_Sin[thetaIdx];
-      int rIdx = (int)((r + rBins / 2.0) / rBins * degreeBins);
+      int rIdx = (int)((r + sqrtf(w * w + h * h) / 2) / (2 * sqrtf(w * w + h * h) / rBins));
       //Modificación del acumulador local.
-      atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
+      if (rIdx >= 0 && rIdx < rBins) {
+        atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
+        }
       }
     }
     __syncthreads(); //Segunda barrera.
