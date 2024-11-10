@@ -65,40 +65,57 @@ __constant__ float d_Sin[degreeBins];
 
 //TODO Kernel memoria Compartida (SHARED)
 __global__ void GPU_HoughTranShared(unsigned char *pic, int w, int h, int *acc) {
-  int x = blockIdx.x * blockDim.x + threadIdx.x;
-  int y = blockIdx.y * blockDim.y + threadIdx.y;
-  int locID = blockIdx.x * blockDim.x + threadIdx.x; //Definición de locID en base al thread.
-  extern __shared__ int localAcc[]; //Acumulador local "localAcc"
-
-  if (locID < (degreeBins * rBins)) {
-    localAcc[locID] = 0; //Inicialización a cero de cada elemento del acumulador en memoria compartida.
-  }
-
-  __syncthreads(); //Barrera para los hilos del bloque en cuestión.
-
-  //Si el píxel es parte de un borde:
-  if (x < w && y < h && pic[y * w + x] > 0) {
-    int xCoord = x - w / 2;
-    int yCoord = h / 2 - y;
-    float rMax = sqrtf(w * w + h * h) / 2.0f;
-    float rScale = 2 * rMax / rBins;
-
-    for (int thetaIdx = 0; thetaIdx < degreeBins; thetaIdx++) {
-      float r = xCoord * d_Cos[thetaIdx] + yCoord * d_Sin[thetaIdx];
-      int rIdx = (int)((r + rMax) / rScale); //Calculo ajustado para rIdx
-      //Modificación del acumulador local.
-      if (rIdx >= 0 && rIdx < rBins) {
-        atomicAdd(&localAcc[rIdx * degreeBins + thetaIdx], 1); // Ejemplo de suma atómica para el acumulador local
-        }
-      }
-    }
-    __syncthreads(); //Segunda barrera.
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
     
-    //Loop al final del kernel para sumar los valores a acc.
-    if (locID < (degreeBins * rBins)) {
-      atomicAdd(&acc[locID], localAcc[locID]);
+    // Calculate global thread ID for accessing the shared memory
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    
+    // Calculate number of elements in shared memory needed per block
+    int elementsPerBlock = blockDim.x * blockDim.y;
+    
+    // Declare shared memory - dynamic allocation
+    extern __shared__ int localAcc[];
+    
+    // Initialize shared memory
+    for(int i = tid; i < (degreeBins * rBins); i += elementsPerBlock) {
+        localAcc[i] = 0;
     }
-  }
+    
+    __syncthreads();
+    
+    // Only process if within image bounds
+    if(x < w && y < h) {
+        int idx = y * w + x;
+        if(pic[idx] > 0) {
+            // Calculate coordinates relative to center
+            int xCoord = x - w/2;
+            int yCoord = h/2 - y;
+            
+            float rMax = sqrtf(1.0f * w * w + 1.0f * h * h) / 2;
+            float rScale = 2 * rMax / rBins;
+            
+            // Process each angle
+            for(int tIdx = 0; tIdx < degreeBins; tIdx++) {
+                float r = xCoord * d_Cos[tIdx] + yCoord * d_Sin[tIdx];
+                int rIdx = (int)((r + rMax) / rScale);
+                
+                if(rIdx >= 0 && rIdx < rBins) {
+                    atomicAdd(&localAcc[rIdx * degreeBins + tIdx], 1);
+                }
+            }
+        }
+    }
+    
+    __syncthreads();
+    
+    // Copy results back to global memory
+    for(int i = tid; i < (degreeBins * rBins); i += elementsPerBlock) {
+        if(localAcc[i] > 0) {
+            atomicAdd(&acc[i], localAcc[i]);
+        }
+    }
+}
 
 
 //TODO Kernel memoria Constante
