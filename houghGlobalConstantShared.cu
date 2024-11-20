@@ -323,6 +323,16 @@ int main (int argc, char **argv)
   cudaEventDestroy(stop);
 
   // TODO clean-up
+  /*cudaFree(d_in);
+  cudaFree(d_hough);
+
+  free(pcCos);
+  free(pcSin);
+  free(h_hough);
+  free(cpuht);*/
+
+  cudaFree(d_Cos);
+  cudaFree(d_Sin);
   cudaFree(d_in);
   cudaFree(d_hough);
 
